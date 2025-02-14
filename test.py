@@ -89,13 +89,7 @@ if len(gpu_ids)>0:
     torch.cuda.set_device(gpu_ids[0])
     cudnn.benchmark = True
 
-######################################################################
-# Load Data
-# ---------
-#
-# We will use torchvision and torch.utils.data packages for loading the
-# data.
-#
+
 data_transforms = transforms.Compose([
         transforms.Resize((opt.h, opt.w), interpolation=3),
         transforms.ToTensor(),
@@ -129,8 +123,8 @@ def fliplr(img):
 def which_view(name):
     if 'satellite' in name:
         return 1
-    elif 'street' in name:
-        return 2
+    # elif 'street' in name:
+    #     return 2
     elif 'drone' in name:
         return 3
     else:
@@ -163,8 +157,8 @@ def extract_feature(model,dataloaders, view_index = 1):
                 elif opt.views ==3:
                     if view_index == 1:
                         outputs, _, _ = model(input_img, None, None)
-                    elif view_index ==2:
-                        _, outputs, _ = model(None, input_img, None)
+                    # elif view_index ==2:
+                    #     _, outputs, _ = model(None, input_img, None)
                     elif view_index ==3:
                         _, _, outputs = model(None, None, input_img)
                 ff += outputs
@@ -216,13 +210,9 @@ which_query = which_view(query_name)
 print('%d -> %d:'%(which_query, which_gallery))
 
 gallery_path = image_datasets[gallery_name].imgs
-f = open('gallery_name.txt','w')
-for p in gallery_path:
-    f.write(p[0]+'\n')
+
 query_path = image_datasets[query_name].imgs
-f = open('query_name.txt','w')
-for p in query_path:
-    f.write(p[0]+'\n')
+
 
 gallery_label, gallery_path  = get_id(gallery_path)
 query_label, query_path  = get_id(query_path)
@@ -242,5 +232,6 @@ if __name__ == "__main__":
 
     print(opt.name)
     result = './model/%s/result.txt'%opt.name
+    # os.system('python evaluate_gpu.py | tee -a %s'%result)
     os.system('python demo.py | tee -a %s'%result)
 

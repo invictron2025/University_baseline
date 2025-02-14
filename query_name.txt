@@ -1,5 +1,0 @@
-/home/gpu/Desktop/Data/Test_Single/query_drone/0839/image-01.jpeg
-/home/gpu/Desktop/Data/Test_Single/query_drone/0839/image-02.jpeg
-/home/gpu/Desktop/Data/Test_Single/query_drone/0839/image-03.jpeg
-/home/gpu/Desktop/Data/Test_Single/query_drone/0839/image-04.jpeg
-/home/gpu/Desktop/Data/Test_Single/query_drone/0839/image-05.jpeg
