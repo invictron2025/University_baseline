@@ -32,8 +32,8 @@ except ImportError: # will be 3.x series
 parser = argparse.ArgumentParser(description='Training')
 parser.add_argument('--gpu_ids',default='0', type=str,help='gpu_ids: e.g. 0  0,1,2  0,2')
 parser.add_argument('--which_epoch',default='last', type=str, help='0,1,2,3...or last')
-parser.add_argument('--test_dir',default='./data/test',type=str, help='./test_data')
-parser.add_argument('--name', default='three_view_long_share_d0.75_256_s1', type=str, help='save model path')
+parser.add_argument('--test_dir',default='/home/gpu/Desktop/Data/University-Release_data/University-Release/test',type=str, help='./test_data')
+parser.add_argument('--name', default='/home/gpu/Desktop/University1652-Baseline/model/three_view_long_share_d0.75_256_s1_google', type=str, help='save model path')
 parser.add_argument('--pool', default='avg', type=str, help='avg|max')
 parser.add_argument('--batchsize', default=128, type=int, help='batchsize')
 parser.add_argument('--h', default=256, type=int, help='height')
@@ -48,7 +48,7 @@ parser.add_argument('--ms',default='1', type=str,help='multiple_scale: e.g. 1 1,
 opt = parser.parse_args()
 ###load config###
 # load the training config
-config_path = os.path.join('./model',opt.name,'opts.yaml')
+config_path = '/home/gpu/Desktop/University1652-Baseline/model/three_view_long_share_d0.75_256_s1_google/opts.yaml'
 with open(config_path, 'r') as stream:
         config = yaml.load(stream, Loader=yaml.FullLoader)
 opt.fp16 = config['fp16'] 
@@ -203,14 +203,14 @@ if use_gpu:
 since = time.time()
 
 #gallery_name = 'gallery_street' 
-query_name = 'query_satellite' 
+# query_name = 'query_satellite' 
 
-#gallery_name = 'gallery_satellite'
+gallery_name = 'gallery_satellite'
 #query_name = 'query_street'
 
 #gallery_name = 'gallery_street'
-#query_name = 'query_drone'
-gallery_name = 'gallery_drone'
+query_name = 'query_drone'
+# gallery_name = 'gallery_drone'
 
 which_gallery = which_view(gallery_name)
 which_query = which_view(query_name)

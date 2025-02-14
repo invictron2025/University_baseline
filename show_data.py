@@ -5,7 +5,7 @@ from PIL import Image
 #target_root = 'data/train/drone'
 #target_root = 'data/train/street'
 #target_root = 'data/train/satellite'
-target_root = 'data/train/google'
+target_root = '/home/gpu/Desktop/Data/University-Release_data/University-Release/train/google'
 
 def pad(inp, pad = 3):
     #print(inp.size)

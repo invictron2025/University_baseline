@@ -10,15 +10,15 @@ import matplotlib.pyplot as plt
 #######################################################################
 # Evaluate
 parser = argparse.ArgumentParser(description='Demo')
-parser.add_argument('--query_index', default=0, type=int, help='test_image_index')
-parser.add_argument('--test_dir',default='./data/test',type=str, help='./test_data')
+parser.add_argument('--query_index', default=4, type=int, help='test_image_index')
+parser.add_argument('--test_dir',default='/home/gpu/Desktop/Data/Test_Single',type=str, help='./test_data')
 opts = parser.parse_args()
 
 
-#gallery_name = 'gallery_satellite'
-#query_name = 'query_drone'
-gallery_name = 'gallery_drone'
-query_name = 'query_satellite'
+gallery_name = 'gallery_satellite'
+query_name = 'query_drone'
+# query_name = 'query_satellite' 
+# gallery_name = 'gallery_drone'
 
 data_dir = opts.test_dir
 image_datasets = {x: datasets.ImageFolder( os.path.join(data_dir,x) ) for x in [gallery_name, query_name]}
@@ -70,7 +70,7 @@ def sort_img(qf, ql, gf, gl):
     #good_index = np.setdiff1d(query_index, camera_index, assume_unique=True)
     junk_index = np.argwhere(gl==-1)
 
-    mask = np.in1d(index, junk_index, invert=True)
+    mask = np.isin(index, junk_index, invert=True)
     index = index[mask]
     return index
 
@@ -83,20 +83,20 @@ index = sort_img(query_feature[i],query_label[i],gallery_feature,gallery_label)
 query_path, _ = image_datasets[query_name].imgs[i]
 query_label = query_label[i]
 print(query_path)
-print('Top 10 images are as follow:')
+print('Top 1 images are as follow:')
 save_folder = 'image_show/%02d'%opts.query_index
 if not os.path.isdir(save_folder):
-    os.mkdir(save_folder)
-os.system('cp %s %s/query.jpg'%(query_path, save_folder))
+    os.makedirs(save_folder)  # This will create all necessary directories
+
 
 try: # Visualize Ranking Result 
     # Graphical User Interface is needed
     fig = plt.figure(figsize=(16,4))
-    ax = plt.subplot(1,11,1)
+    ax = plt.subplot(1,2,1)
     ax.axis('off')
     imshow(query_path,'query')
-    for i in range(10):
-        ax = plt.subplot(1,11,i+2)
+    for i in range(1):
+        ax = plt.subplot(1,2,i+2)
         ax.axis('off')
         img_path, _ = image_datasets[gallery_name].imgs[index[i]]
         label = gallery_label[index[i]]
@@ -110,7 +110,7 @@ try: # Visualize Ranking Result
         print(img_path)
     #plt.pause(100)  # pause a bit so that plots are updated
 except RuntimeError:
-    for i in range(10):
+    for i in range(1):
         img_path = image_datasets.imgs[index[i]]
         print(img_path[0])
     print('If you want to see the visualization of the ranking result, graphical user interface is needed.')
