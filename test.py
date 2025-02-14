@@ -131,7 +131,7 @@ def which_view(name):
         print('unknown view')
     return -1
 
-def extract_feature(model,dataloaders, view_index = 1):
+def extract_feature(model, dataloaders, view_index=1):
     features = torch.FloatTensor()
     count = 0
     for data in dataloaders:
@@ -139,32 +139,31 @@ def extract_feature(model,dataloaders, view_index = 1):
         n, c, h, w = img.size()
         count += n
         print(count)
-        ff = torch.FloatTensor(n,512).zero_().cuda()
+        ff = torch.FloatTensor(n, 512).zero_()  # Default tensor on CPU
 
         for i in range(2):
-            if(i==1):
+            if i == 1:
                 img = fliplr(img)
-            input_img = Variable(img.cuda())
+            input_img = Variable(img)  # No .cuda() here to use CPU
             for scale in ms:
                 if scale != 1:
-                    # bicubic is only  available in pytorch>= 1.1
+                    # bicubic is only available in pytorch>=1.1
                     input_img = nn.functional.interpolate(input_img, scale_factor=scale, mode='bilinear', align_corners=False)
-                if opt.views ==2:
+                if opt.views == 2:
                     if view_index == 1:
                         outputs, _ = model(input_img, None) 
-                    elif view_index ==2:
+                    elif view_index == 2:
                         _, outputs = model(None, input_img) 
-                elif opt.views ==3:
+                elif opt.views == 3:
                     if view_index == 1:
                         outputs, _, _ = model(input_img, None, None)
-                    # elif view_index ==2:
-                    #     _, outputs, _ = model(None, input_img, None)
-                    elif view_index ==3:
+                    elif view_index == 3:
                         _, _, outputs = model(None, None, input_img)
                 ff += outputs
-        # norm feature
+
+        # Normalize feature
         if opt.PCB:
-            # feature size (n,2048,6)
+            # Feature size (n,2048,6)
             # 1. To treat every part equally, I calculate the norm for every 2048-dim part feature.
             # 2. To keep the cosine score==1, sqrt(6) is added to norm the whole feature (2048*6).
             fnorm = torch.norm(ff, p=2, dim=1, keepdim=True) * np.sqrt(6) 
@@ -174,7 +173,7 @@ def extract_feature(model,dataloaders, view_index = 1):
             fnorm = torch.norm(ff, p=2, dim=1, keepdim=True)
             ff = ff.div(fnorm.expand_as(ff))
 
-        features = torch.cat((features,ff.data.cpu()), 0)
+        features = torch.cat((features, ff.data), 0)  # Ensure the tensor is on CPU
     return features
 
 def get_id(img_path):
@@ -195,7 +194,7 @@ model, _, epoch = load_network(opt.name, opt)
 model.classifier.classifier = nn.Sequential()
 model = model.eval()
 if use_gpu:
-    model = model.cuda()
+    model = model.cpu()
 
 # Extract feature
 since = time.time()
