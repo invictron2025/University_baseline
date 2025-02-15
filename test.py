@@ -5,40 +5,41 @@ from __future__ import print_function, division
 import argparse
 import torch
 import torch.nn as nn
-import torch.optim as optim
-from torch.optim import lr_scheduler
+
+
 from torch.autograd import Variable
 import torch.backends.cudnn as cudnn
 import numpy as np
-import torchvision
-from torchvision import datasets, models, transforms
+
+from torchvision import datasets,transforms
 import time
 import os
 import scipy.io
 import yaml
 import math
-from model import ft_net, two_view_net, three_view_net
-from utils import load_network
 
-#fp16
-try:
-    from apex.fp16_utils import *
-except ImportError: # will be 3.x series
-    print('This is not an error. If you want to use low precision, i.e., fp16, please install the apex with cuda support (https://github.com/NVIDIA/apex) and update pytorch to 1.0')
-######################################################################
-# Options
-# --------
+from utils import load_network
+from torch.amp import autocast
+
+# #fp16
+# try:
+#     from apex.fp16_utils import *
+# except ImportError: # will be 3.x series
+#     print('This is not an error. ')
+# ######################################################################
+# # Options
+# # --------
 
 parser = argparse.ArgumentParser(description='Training')
 parser.add_argument('--gpu_ids',default='0', type=str,help='gpu_ids: e.g. 0  0,1,2  0,2')
 parser.add_argument('--which_epoch',default='last', type=str, help='0,1,2,3...or last')
-parser.add_argument('--test_dir',default='/home/gpu/Desktop/Data/Test_Single',type=str, help='./test_data')
+parser.add_argument('--test_dir',default='/home/gpu/Desktop/Data/University-Release_data/University-Release/test',type=str, help='./test_data')
 parser.add_argument('--name', default='/home/gpu/Desktop/University1652-Baseline/model/three_view_long_share_d0.75_256_s1_google', type=str, help='save model path')
 parser.add_argument('--pool', default='avg', type=str, help='avg|max')
-parser.add_argument('--batchsize', default=128, type=int, help='batchsize')
+parser.add_argument('--batchsize', default=256, type=int, help='batchsize')
 parser.add_argument('--h', default=256, type=int, help='height')
 parser.add_argument('--w', default=256, type=int, help='width')
-parser.add_argument('--views', default=2, type=int, help='views')
+parser.add_argument('--views', default=3, type=int, help='views')
 parser.add_argument('--use_dense', action='store_true', help='use densenet121' )
 parser.add_argument('--PCB', action='store_true', help='use PCB' )
 parser.add_argument('--multi', action='store_true', help='use multiple query' )
@@ -71,11 +72,11 @@ str_ids = opt.gpu_ids.split(',')
 name = opt.name
 test_dir = opt.test_dir
 
-gpu_ids = []
-for str_id in str_ids:
-    id = int(str_id)
-    if id >=0:
-        gpu_ids.append(id)
+# gpu_ids = []
+# for str_id in str_ids:
+#     id = int(str_id)
+#     if id >=0:
+#         gpu_ids.append(id)
 
 print('We use the scale: %s'%opt.ms)
 str_ms = opt.ms.split(',')
@@ -84,12 +85,18 @@ for s in str_ms:
     s_f = float(s)
     ms.append(math.sqrt(s_f))
 
-# set gpu ids
-if len(gpu_ids)>0:
-    torch.cuda.set_device(gpu_ids[0])
-    cudnn.benchmark = True
+# # set gpu ids
+# if len(gpu_ids)>0:
+#     torch.cuda.set_device(gpu_ids[0])
+#     cudnn.benchmark = True
 
-
+######################################################################
+# Load Data
+# ---------
+#
+# We will use torchvision and torch.utils.data packages for loading the
+# data.
+#
 data_transforms = transforms.Compose([
         transforms.Resize((opt.h, opt.w), interpolation=3),
         transforms.ToTensor(),
@@ -106,75 +113,64 @@ if opt.PCB:
 
 data_dir = test_dir
 
+num_workers = min(16, os.cpu_count())  # Use up to 16 workers or max CPU cores
 
-
-image_datasets = {x: datasets.ImageFolder( os.path.join(data_dir,x) ,data_transforms) for x in ['gallery_satellite',  'query_drone']}
+image_datasets = {x: datasets.ImageFolder( os.path.join(data_dir,x) ,data_transforms) for x in ['gallery_satellite', 'query_drone']}
 dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=opt.batchsize,
-                                            shuffle=False, num_workers=16) for x in ['gallery_satellite', 'query_drone']}
+                                            shuffle=False, num_workers=num_workers,pin_memory=True) for x in ['gallery_satellite', 'query_drone']}
 use_gpu = torch.cuda.is_available()
 
-
-def fliplr(img):
-    '''flip horizontal'''
-    inv_idx = torch.arange(img.size(3)-1,-1,-1).long()  # N x C x H x W
-    img_flip = img.index_select(3,inv_idx)
-    return img_flip
+# def fliplr(img):
+#     '''flip horizontal'''
+#     inv_idx = torch.arange(img.size(3)-1,-1,-1).long()  # N x C x H x W
+#     img_flip = img.index_select(3,inv_idx)
+#     return img_flip
 
 def which_view(name):
     if 'satellite' in name:
         return 1
-    # elif 'street' in name:
-    #     return 2
+    elif 'street' in name:
+        return 2
     elif 'drone' in name:
         return 3
     else:
         print('unknown view')
     return -1
 
-def extract_feature(model, dataloaders, view_index=1):
-    features = torch.FloatTensor()
-    count = 0
-    for data in dataloaders:
-        img, label = data
-        n, c, h, w = img.size()
-        count += n
-        print(count)
-        ff = torch.FloatTensor(n, 512).zero_()  # Default tensor on CPU
+def extract_feature(model, dataloaders, view_index):
+    features = []
+    count = 0  # Track total processed images
 
-        for i in range(2):
-            if i == 1:
-                img = fliplr(img)
-            input_img = Variable(img)  # No .cuda() here to use CPU
-            for scale in ms:
-                if scale != 1:
-                    # bicubic is only available in pytorch>=1.1
-                    input_img = nn.functional.interpolate(input_img, scale_factor=scale, mode='bilinear', align_corners=False)
-                if opt.views == 2:
-                    if view_index == 1:
-                        outputs, _ = model(input_img, None) 
-                    elif view_index == 2:
-                        _, outputs = model(None, input_img) 
-                elif opt.views == 3:
-                    if view_index == 1:
-                        outputs, _, _ = model(input_img, None, None)
-                    elif view_index == 3:
-                        _, _, outputs = model(None, None, input_img)
-                ff += outputs
+    with torch.no_grad():  # Disable gradient calculation
+        for img, label in dataloaders:
+            img = img.cuda(non_blocking=True)
+            n = img.size(0)
+            count += n
+            print(f"Processed: {count}")
 
-        # Normalize feature
-        if opt.PCB:
-            # Feature size (n,2048,6)
-            # 1. To treat every part equally, I calculate the norm for every 2048-dim part feature.
-            # 2. To keep the cosine score==1, sqrt(6) is added to norm the whole feature (2048*6).
-            fnorm = torch.norm(ff, p=2, dim=1, keepdim=True) * np.sqrt(6) 
-            ff = ff.div(fnorm.expand_as(ff))
-            ff = ff.view(ff.size(0), -1)
-        else:
-            fnorm = torch.norm(ff, p=2, dim=1, keepdim=True)
-            ff = ff.div(fnorm.expand_as(ff))
+            # Pre-allocate feature tensor
+            ff = torch.zeros(n, 512, device="cuda")
 
-        features = torch.cat((features, ff.data), 0)  # Ensure the tensor is on CPU
-    return features
+            # Stack original and flipped images to process in a single forward pass
+            img_flipped = torch.flip(img, dims=[3])  # Flip horizontally
+            img_stack = torch.cat([img, img_flipped], dim=0)
+
+            with autocast("cuda"):  # Corrected autocast usage
+                if view_index == 1:
+                    outputs, _, _ = model(img_stack, None, None)
+                elif view_index == 3:
+                    _, _, outputs = model(None, None, img_stack)
+
+                # Sum flipped and original features
+                ff += outputs[:n] + outputs[n:]
+
+            # Normalize features
+            ff /= ff.norm(p=2, dim=1, keepdim=True)
+
+            # Append to feature list (convert to CPU only once)
+            features.append(ff.cpu())
+
+    return torch.cat(features, dim=0)
 
 def get_id(img_path):
     camera_id = []
@@ -192,16 +188,13 @@ print('-------test-----------')
 
 model, _, epoch = load_network(opt.name, opt)
 model.classifier.classifier = nn.Sequential()
-model = model.eval()
-if use_gpu:
-    model = model.cpu()
+model = model.eval().cuda()
 
 # Extract feature
 since = time.time()
 
-
-query_name = 'query_drone' 
 gallery_name = 'gallery_satellite'
+query_name = 'query_drone'
 
 
 which_gallery = which_view(gallery_name)
@@ -231,6 +224,4 @@ if __name__ == "__main__":
 
     print(opt.name)
     result = './model/%s/result.txt'%opt.name
-    # os.system('python evaluate_gpu.py | tee -a %s'%result)
-    os.system('python demo.py | tee -a %s'%result)
-
+    os.system('python evaluate_gpu.py | tee -a %s'%result)

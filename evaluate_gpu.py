@@ -20,7 +20,7 @@ def evaluate(qf, ql, gf, gl):
 
 ######################################################################
 # Load Data
-result = scipy.io.loadmat('pytorch_result_D_to_S.mat')
+result = scipy.io.loadmat('pytorch_result')
 query_feature = torch.FloatTensor(result['query_f']).cuda()
 query_label = result['query_label'][0]
 gallery_feature = torch.FloatTensor(result['gallery_f']).cuda()

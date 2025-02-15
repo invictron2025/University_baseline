@@ -1,42 +1,33 @@
 import os
 import torch
 import yaml
-from model import two_view_net, three_view_net
+from model import  three_view_net
 
 def make_weights_for_balanced_classes(images, nclasses):
-    # Count the number of samples per class
     count = [0] * nclasses
-    for _, label in images:
-        count[label] += 1
-
-    # Calculate weight for each class
+    for item in images:
+        count[item[1]] += 1 # count the image number in every class
+    weight_per_class = [0.] * nclasses
     N = float(sum(count))
-    weight_per_class = [N / float(c) if c > 0 else 0.0 for c in count]
-
-    # Assign weights to images based on their class label
-    weight = [weight_per_class[label] for _, label in images]
-    
+    for i in range(nclasses):
+        weight_per_class[i] = N/float(count[i])
+    weight = [0] * len(images)
+    for idx, val in enumerate(images):
+        weight[idx] = weight_per_class[val[1]]
     return weight
 
-
 # Get model list for resume
-import os
-
 def get_model_list(dirname, key):
-    if not os.path.exists(dirname):
-        print(f'no dir: {dirname}')
+    if os.path.exists(dirname) is False:
+        print('no dir: %s'%dirname)
         return None
-    
-    # List all models that match the key and end with '.pth'
-    gen_models = sorted(
-        (os.path.join(dirname, f) for f in os.listdir(dirname)
-         if os.path.isfile(os.path.join(dirname, f)) and key in f and f.endswith(".pth")),
-        reverse=True  # To get the latest model
-    )
-    
-    # Return the last model if available
-    return gen_models[0] if gen_models else None
-
+    gen_models = [os.path.join(dirname, f) for f in os.listdir(dirname) if
+                  os.path.isfile(os.path.join(dirname, f)) and key in f and ".pth" in f]
+    if gen_models is None:
+        return None
+    gen_models.sort()
+    last_model_name = gen_models[-1]
+    return last_model_name
 
 ######################################################################
 # Save model
@@ -98,16 +89,15 @@ def load_network(name, opt):
     #     model = ft_net_dense(opt.nclasses, opt.droprate, opt.stride, None, opt.pool)
     # if opt.PCB:
     #     model = PCB(opt.nclasses)
-
-    # if opt.views == 2:
-    #     model = two_view_net(opt.nclasses, opt.droprate, stride = opt.stride, pool = opt.pool, share_weight = opt.share)
+    
    
     model = three_view_net(opt.nclasses, opt.droprate, stride = opt.stride, pool = opt.pool, share_weight = opt.share)
 
     # if 'use_vgg16' in config:
     #     opt.use_vgg16 = config['use_vgg16']
-        
-    #     if opt.views == 3:
+    #     if opt.views == 2:
+    #         model = two_view_net(opt.nclasses, opt.droprate, stride = opt.stride, pool = opt.pool, share_weight = opt.share, VGG16 = opt.use_vgg16)
+    #     elif opt.views == 3:
     #         model = three_view_net(opt.nclasses, opt.droprate, stride = opt.stride, pool = opt.pool, share_weight = opt.share, VGG16 = opt.use_vgg16)
 
 
@@ -139,4 +129,3 @@ def update_average(model_tgt, model_src, beta):
         p_tgt.copy_(beta*p_tgt + (1. - beta)*p_src)
 
     toogle_grad(model_src, True)
-
