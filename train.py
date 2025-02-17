@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 import copy
 import time
 import os
-from model import two_view_net, three_view_net
+from model import  three_view_net
 from random_erasing import RandomErasing
 from autoaugment import ImageNetPolicy, CIFAR10Policy
 import yaml
@@ -54,7 +54,7 @@ parser.add_argument('--batchsize', default=8, type=int, help='batchsize')
 parser.add_argument('--pad', default=10, type=int, help='padding')
 parser.add_argument('--h', default=384, type=int, help='height')
 parser.add_argument('--w', default=384, type=int, help='width')
-parser.add_argument('--views', default=2, type=int, help='the number of views')
+parser.add_argument('--views', default=3, type=int, help='the number of views')
 parser.add_argument('--erasing_p', default=0, type=float, help='Random Erasing probability, in [0,1]')
 parser.add_argument('--DA', action='store_true', help='use Color Data Augmentation')
 #backbone

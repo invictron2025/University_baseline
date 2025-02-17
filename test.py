@@ -6,11 +6,6 @@ import argparse
 import torch
 import torch.nn as nn
 
-
-from torch.autograd import Variable
-import torch.backends.cudnn as cudnn
-import numpy as np
-
 from torchvision import datasets,transforms
 import time
 import os
@@ -21,14 +16,7 @@ import math
 from utils import load_network
 from torch.amp import autocast
 
-# #fp16
-# try:
-#     from apex.fp16_utils import *
-# except ImportError: # will be 3.x series
-#     print('This is not an error. ')
-# ######################################################################
-# # Options
-# # --------
+
 
 parser = argparse.ArgumentParser(description='Training')
 parser.add_argument('--gpu_ids',default='0', type=str,help='gpu_ids: e.g. 0  0,1,2  0,2')
@@ -90,25 +78,13 @@ for s in str_ms:
 #     torch.cuda.set_device(gpu_ids[0])
 #     cudnn.benchmark = True
 
-######################################################################
-# Load Data
-# ---------
-#
-# We will use torchvision and torch.utils.data packages for loading the
-# data.
-#
 data_transforms = transforms.Compose([
         transforms.Resize((opt.h, opt.w), interpolation=3),
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 ])
 
-if opt.PCB:
-    data_transforms = transforms.Compose([
-        transforms.Resize((384,192), interpolation=3),
-        transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]) 
-    ])
+
 
 
 data_dir = test_dir
@@ -120,22 +96,18 @@ dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=opt.
                                             shuffle=False, num_workers=num_workers,pin_memory=True) for x in ['gallery_satellite', 'query_drone']}
 use_gpu = torch.cuda.is_available()
 
-# def fliplr(img):
-#     '''flip horizontal'''
-#     inv_idx = torch.arange(img.size(3)-1,-1,-1).long()  # N x C x H x W
-#     img_flip = img.index_select(3,inv_idx)
-#     return img_flip
 
 def which_view(name):
-    if 'satellite' in name:
-        return 1
-    elif 'street' in name:
-        return 2
-    elif 'drone' in name:
-        return 3
-    else:
-        print('unknown view')
+    view_mapping = {'satellite': 1, 'street': 2, 'drone': 3}
+    for key, value in view_mapping.items():
+        if key in name:
+            return value
+    print('unknown view')
     return -1
+
+
+import torch
+from torch.cuda.amp import autocast
 
 def extract_feature(model, dataloaders, view_index):
     features = []
@@ -143,34 +115,38 @@ def extract_feature(model, dataloaders, view_index):
 
     with torch.no_grad():  # Disable gradient calculation
         for img, label in dataloaders:
-            img = img.cuda(non_blocking=True)
-            n = img.size(0)
+            img = img.cuda(non_blocking=True)  # Faster GPU transfer
+            n = img.shape[0]
             count += n
             print(f"Processed: {count}")
 
-            # Pre-allocate feature tensor
-            ff = torch.zeros(n, 512, device="cuda")
+            # Pre-allocate feature tensor with the correct size
+            ff = torch.empty(n, 512, device="cuda")
 
-            # Stack original and flipped images to process in a single forward pass
+            # Create flipped images and stack
             img_flipped = torch.flip(img, dims=[3])  # Flip horizontally
-            img_stack = torch.cat([img, img_flipped], dim=0)
+            img_stack = torch.cat((img, img_flipped), dim=0)  # Avoid list-based cat
 
-            with autocast("cuda"):  # Corrected autocast usage
+            with torch.autocast("cuda"):  # Just use this, no arguments needed
+
                 if view_index == 1:
                     outputs, _, _ = model(img_stack, None, None)
                 elif view_index == 3:
                     _, _, outputs = model(None, None, img_stack)
+                else:
+                    raise ValueError(f"Invalid view_index: {view_index}")  # Avoid silent failures
 
-                # Sum flipped and original features
-                ff += outputs[:n] + outputs[n:]
+            # Sum flipped and original features in-place (reducing memory overhead)
+            ff.copy_(outputs[:n] + outputs[n:])  
 
-            # Normalize features
-            ff /= ff.norm(p=2, dim=1, keepdim=True)
+            # Normalize in-place for efficiency
+            ff.div_(ff.norm(p=2, dim=1, keepdim=True) + 1e-12)  # Avoid NaNs
 
-            # Append to feature list (convert to CPU only once)
-            features.append(ff.cpu())
+            # Append to feature list
+            features.append(ff.cpu())  
 
     return torch.cat(features, dim=0)
+
 
 def get_id(img_path):
     camera_id = []
