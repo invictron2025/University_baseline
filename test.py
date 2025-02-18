@@ -21,10 +21,10 @@ from torch.amp import autocast
 parser = argparse.ArgumentParser(description='Training')
 parser.add_argument('--gpu_ids',default='0', type=str,help='gpu_ids: e.g. 0  0,1,2  0,2')
 parser.add_argument('--which_epoch',default='last', type=str, help='0,1,2,3...or last')
-parser.add_argument('--test_dir',default='/home/gpu/Desktop/Data/University-Release_data/University-Release/test',type=str, help='./test_data')
+parser.add_argument('--test_dir',default='/home/gpu/Desktop/Data/Test_Single',type=str, help='./test_data')
 parser.add_argument('--name', default='/home/gpu/Desktop/University1652-Baseline/model/three_view_long_share_d0.75_256_s1_google', type=str, help='save model path')
 parser.add_argument('--pool', default='avg', type=str, help='avg|max')
-parser.add_argument('--batchsize', default=256, type=int, help='batchsize')
+parser.add_argument('--batchsize', default=4, type=int, help='batchsize')
 parser.add_argument('--h', default=256, type=int, help='height')
 parser.add_argument('--w', default=256, type=int, help='width')
 parser.add_argument('--views', default=3, type=int, help='views')
@@ -89,11 +89,12 @@ data_transforms = transforms.Compose([
 
 data_dir = test_dir
 
-num_workers = min(16, os.cpu_count())  # Use up to 16 workers or max CPU cores
+num_workers = 0
+
 
 image_datasets = {x: datasets.ImageFolder( os.path.join(data_dir,x) ,data_transforms) for x in ['gallery_satellite', 'query_drone']}
 dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=opt.batchsize,
-                                            shuffle=False, num_workers=num_workers,pin_memory=True) for x in ['gallery_satellite', 'query_drone']}
+                                            shuffle=False, num_workers=num_workers,pin_memory=False) for x in ['gallery_satellite', 'query_drone']}
 use_gpu = torch.cuda.is_available()
 
 
@@ -106,8 +107,7 @@ def which_view(name):
     return -1
 
 
-import torch
-from torch.cuda.amp import autocast
+
 
 def extract_feature(model, dataloaders, view_index):
     features = []
@@ -198,6 +198,6 @@ if __name__ == "__main__":
     result = {'gallery_f':gallery_feature.numpy(),'gallery_label':gallery_label,'gallery_path':gallery_path,'query_f':query_feature.numpy(),'query_label':query_label, 'query_path':query_path}
     scipy.io.savemat('pytorch_result.mat',result)
 
-    print(opt.name)
+    # print(opt.name)
     result = './model/%s/result.txt'%opt.name
-    os.system('python evaluate_gpu.py | tee -a %s'%result)
+    os.system('python demo1.py | tee -a %s'%result)
