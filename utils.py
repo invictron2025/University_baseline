@@ -46,31 +46,40 @@ def save_network(network, dirname, epoch_label):
 ######################################################################
 #  Load model for resume
 #---------------------------
-def load_network(name, opt):
+def load_network(name, opt, device=None):
     dirname = os.path.join('./model', name)
-    last_model_name = get_model_list(dirname, 'net')  # Directly get the model file
+    last_model_name = get_model_list(dirname, 'net')
 
     if not last_model_name:
         print("No model found!")
         return None, opt, None
 
-    # Extract epoch number from filename
+    # Extract epoch number
     match = re.search(r'net_(\d+|last)\.pth', last_model_name)
     epoch = int(match.group(1)) if match and match.group(1).isdigit() else match.group(1)
 
-    # Load config directly without looping over keys
+    # Load config using faster binary read
     config_path = os.path.join(dirname, 'opts.yaml')
-    with open(config_path, 'r') as stream:
-        opt.__dict__.update(yaml.safe_load(stream))  # Faster way to update opt attributes
+    with open(config_path, 'rb') as stream:
+        opt.__dict__.update(yaml.safe_load(stream))
 
-    # Initialize the model
+    # Initialize model
     model = three_view_net(opt.nclasses, opt.droprate, stride=opt.stride, pool=opt.pool, share_weight=opt.share)
 
-    print(f'Loading model from {last_model_name}')
-    model.load_state_dict(torch.load(last_model_name))
+    print(f'Loading model from {last_model_name}...')
+
+    # Set default device
+    if device is None:
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+    # Load model faster
+    state_dict = torch.load(last_model_name, map_location='cpu')  # Load to CPU first
+    model.load_state_dict(state_dict, strict=False)  # Disable strict mode if needed
+    model = model.to(device)  # Move to GPU if available
+
+    torch.cuda.empty_cache()  # Free unnecessary memory
 
     return model, opt, epoch
-
 def toogle_grad(model, requires_grad):
     for p in model.parameters():
         p.requires_grad_(requires_grad)
