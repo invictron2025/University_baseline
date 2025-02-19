@@ -3,6 +3,7 @@ import torch.nn as nn
 from torch.nn import init
 from torchvision import models
 from torchvision.models import ResNet50_Weights
+from torchvision.models import ResNet152_Weights
 ######################################################################
 
 def weights_init_kaiming(m):
@@ -61,7 +62,7 @@ class ClassBlock(nn.Module):
 class ft_net(nn.Module):
     def __init__(self, class_num, droprate=0.5, stride=2, init_model=None, pool='avg'):
         super(ft_net, self).__init__()
-        model_ft = models.resnet50(weights=ResNet50_Weights.DEFAULT)
+        model_ft = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V1)  # ResNet-50
 
         if stride == 1:
             model_ft.layer4[0].downsample[0].stride = (1,1)
