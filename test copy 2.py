@@ -24,7 +24,7 @@ parser.add_argument('--which_epoch',default='last', type=str, help='0,1,2,3...or
 parser.add_argument('--test_dir',default='/home/gpu/Desktop/Data/University-Release_data/University-Release/test',type=str, help='./test_data')
 parser.add_argument('--name', default='/home/gpu/Desktop/University1652-Baseline/model/three_view_long_share_d0.75_256_s1_google', type=str, help='save model path')
 parser.add_argument('--pool', default='avg', type=str, help='avg|max')
-parser.add_argument('--batchsize', default=256, type=int, help='batchsize')
+parser.add_argument('--batchsize', default=2, type=int, help='batchsize')
 parser.add_argument('--h', default=256, type=int, help='height')
 parser.add_argument('--w', default=256, type=int, help='width')
 parser.add_argument('--views', default=3, type=int, help='views')
@@ -33,7 +33,7 @@ parser.add_argument('--PCB', action='store_true', help='use PCB' )
 parser.add_argument('--multi', action='store_true', help='use multiple query' )
 parser.add_argument('--fp16', action='store_true', help='use fp16.' )
 parser.add_argument('--ms',default='1', type=str,help='multiple_scale: e.g. 1 1,1.1  1,1.1,1.2')
-
+parser.add_argument('--query_index', default=3, type=int, help='test_image_index')
 opt = parser.parse_args()
 ###load config###
 # load the training config
@@ -66,7 +66,7 @@ test_dir = opt.test_dir
 #     if id >=0:
 #         gpu_ids.append(id)
 
-print('We use the scale: %s'%opt.ms)
+# print('We use the scale: %s'%opt.ms)
 str_ms = opt.ms.split(',')
 ms = []
 for s in str_ms:
@@ -89,7 +89,7 @@ data_transforms = transforms.Compose([
 
 data_dir = test_dir
 
-num_workers = 16
+num_workers = 0
 
 
 image_datasets = {x: datasets.ImageFolder( os.path.join(data_dir,x) ,data_transforms) for x in ['gallery_satellite', 'query_drone']}
@@ -162,7 +162,7 @@ def get_id(img_path):
 # Load Collected data Trained model
 print('-------test-----------')
 
-model, _, = load_network(opt.name, opt)
+model, _ = load_network(opt.name, opt)
 model.classifier.classifier = nn.Sequential()
 model = model.eval().cuda()
 
@@ -175,7 +175,7 @@ query_name = 'query_drone'
 
 which_gallery = which_view(gallery_name)
 which_query = which_view(query_name)
-print('%d -> %d:'%(which_query, which_gallery))
+# print('%d -> %d:'%(which_query, which_gallery))
 
 gallery_path = image_datasets[gallery_name].imgs
 
@@ -190,15 +190,32 @@ if __name__ == "__main__":
         query_feature = extract_feature(model,dataloaders[query_name], which_query)
         gallery_feature = extract_feature(model,dataloaders[gallery_name], which_gallery)
 
+    i = opt.query_index
+    query = query_feature[i].view(-1, 1)  # Reshape for matrix multiplication
+    scores = torch.mm(gallery_feature, query).squeeze(1)  # Compute cosine similarity
+    index = torch.topk(scores, k=10, largest=True).indices.cpu().numpy()  # Get top 10 indices
+
+    # Check for correct match in top results
+    if gallery_label[index[0]] == query_label[i]:
+            print(f"Correct Match: Label {gallery_label[index[0]]}")
+    else:
+        correct_match =None 
+        wrong_match = index[0] # Default to first match
+
+        for idx in index[1:]:  # Start from 2nd image
+            if gallery_label[idx] == query_label[i]:
+                correct_match = idx
+                print(f"Correct Match: Label {gallery_label[correct_match]}")
+                break
+
+        # Print Result
+        if correct_match is None:
+            print(f"Wrong Match: Label {gallery_label[wrong_match]}")
+        
+        
+
+    ###########################################################################
+
     time_elapsed = time.time() - since
     print('Test complete in {:.0f}m {:.0f}s'.format(
         time_elapsed // 60, time_elapsed % 60))
-
-    # Save to Matlab for check
-    result = {'gallery_f':gallery_feature.numpy(),'gallery_label':gallery_label,'gallery_path':gallery_path,'query_f':query_feature.numpy(),'query_label':query_label, 'query_path':query_path}
-    scipy.io.savemat('pytorch_result.mat',result)
-
-    # print(opt.name)
-    result = './model/%s/result.txt'%opt.name
-    # os.system('python demo.py | tee -a %s'%result)
-    # os.system('python evaluate_gpu.py | tee -a %s'%result)

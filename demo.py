@@ -4,23 +4,19 @@ import torch
 import numpy as np
 import os
 from torchvision import datasets
-
-import shutil
 #import matplotlib
 #matplotlib.use('agg')
 import matplotlib.pyplot as plt
 #######################################################################
 # Evaluate
 parser = argparse.ArgumentParser(description='Demo')
-parser.add_argument('--query_index', default=56, type=int, help='test_image_index')
+parser.add_argument('--query_index', default=0, type=int, help='test_image_index')
 parser.add_argument('--test_dir',default='/home/gpu/Desktop/Data/University-Release_data/University-Release/test',type=str, help='./test_data')
 opts = parser.parse_args()
 
 
 gallery_name = 'gallery_satellite'
 query_name = 'query_drone'
-# query_name = 'query_satellite' 
-# gallery_name = 'gallery_drone'
 
 data_dir = opts.test_dir
 image_datasets = {x: datasets.ImageFolder( os.path.join(data_dir,x) ) for x in [gallery_name, query_name]}
@@ -84,40 +80,37 @@ index = sort_img(query_feature[i],query_label[i],gallery_feature,gallery_label)
 
 query_path, _ = image_datasets[query_name].imgs[i]
 query_label = query_label[i]
-# print(query_path)
-# print('Top 1 images are as follow:')
+print(query_path)
+print('Top 10 images are as follow:')
 save_folder = 'image_show/%02d'%opts.query_index
 if not os.path.isdir(save_folder):
-    os.makedirs(save_folder)  # This will create all necessary directories
-
+    os.mkdir(save_folder)
+os.system('cp %s %s/query.jpg'%(query_path, save_folder))
 
 try: # Visualize Ranking Result 
     # Graphical User Interface is needed
     fig = plt.figure(figsize=(16,4))
-    ax = plt.subplot(1,2,1)
+    ax = plt.subplot(1,11,1)
     ax.axis('off')
     imshow(query_path,'query')
-    for i in range(1):
-        ax = plt.subplot(1,2,i+2)
+    for i in range(10):
+        ax = plt.subplot(1,11,i+2)
         ax.axis('off')
         img_path, _ = image_datasets[gallery_name].imgs[index[i]]
         label = gallery_label[index[i]]
-        # print(label)
+        print(label)
         imshow(img_path)
         os.system('cp %s %s/s%02d.jpg'%(img_path, save_folder, i))
         if label == query_label:
             ax.set_title('%d'%(i+1), color='green')
-            print("Correct Match",label)
-        
         else:
             ax.set_title('%d'%(i+1), color='red')
-            print("Wrong Match",label)
+        print(img_path)
     #plt.pause(100)  # pause a bit so that plots are updated
 except RuntimeError:
-    for i in range(1):
+    for i in range(10):
         img_path = image_datasets.imgs[index[i]]
         print(img_path[0])
-    # print('If you want to see the visualization of the ranking result, graphical user interface is needed.')
+    print('If you want to see the visualization of the ranking result, graphical user interface is needed.')
 
 fig.savefig("show.png")
-
