@@ -14,27 +14,17 @@ import yaml
 import math
 
 from utils import load_network
-from torch.amp import autocast
 
 
 
 parser = argparse.ArgumentParser(description='Training')
-parser.add_argument('--gpu_ids',default='0', type=str,help='gpu_ids: e.g. 0  0,1,2  0,2')
-parser.add_argument('--which_epoch',default='last', type=str, help='0,1,2,3...or last')
 parser.add_argument('--test_dir',default='/home/gpu/Desktop/Data/SpecificData/class_17',type=str, help='./test_data')
 parser.add_argument('--name', default='/home/gpu/Desktop/University1652-Baseline/model/three_view_long_share_d0.75_256_s1_google', type=str, help='save model path')
-parser.add_argument('--pool', default='avg', type=str, help='avg|max')
 parser.add_argument('--batchsize', default=2, type=int, help='batchsize')
-parser.add_argument('--h', default=256, type=int, help='height')
-parser.add_argument('--w', default=256, type=int, help='width')
-parser.add_argument('--views', default=3, type=int, help='views')
-parser.add_argument('--use_dense', action='store_true', help='use densenet121' )
-parser.add_argument('--PCB', action='store_true', help='use PCB' )
-parser.add_argument('--multi', action='store_true', help='use multiple query' )
-parser.add_argument('--fp16', action='store_true', help='use fp16.' )
-parser.add_argument('--ms',default='1', type=str,help='multiple_scale: e.g. 1 1,1.1  1,1.1,1.2')
 parser.add_argument('--query_index', default=0, type=int, help='test_image_index')
+# parser.add_argument('--gpu_ids',default='0', type=str,help='gpu_ids: e.g. 0  0,1,2  0,2')
 opt = parser.parse_args()
+
 ###load config###
 # load the training config
 config_path = os.path.join('./model',opt.name,'opts.yaml')
@@ -55,10 +45,10 @@ if 'nclasses' in config: # tp compatible with old config files
 else: 
     opt.nclasses = 729 
 
-str_ids = opt.gpu_ids.split(',')
-#which_epoch = opt.which_epoch
 name = opt.name
 test_dir = opt.test_dir
+
+# str_ids = opt.gpu_ids.split(',')
 
 # gpu_ids = []
 # for str_id in str_ids:
@@ -67,11 +57,11 @@ test_dir = opt.test_dir
 #         gpu_ids.append(id)
 
 # print('We use the scale: %s'%opt.ms)
-str_ms = opt.ms.split(',')
-ms = []
-for s in str_ms:
-    s_f = float(s)
-    ms.append(math.sqrt(s_f))
+# str_ms = opt.ms.split(',')
+# ms = []
+# for s in str_ms:
+#     s_f = float(s)
+#     ms.append(math.sqrt(s_f))
 
 # # set gpu ids
 # if len(gpu_ids)>0:
@@ -85,18 +75,12 @@ data_transforms = transforms.Compose([
 ])
 
 
-
-
 data_dir = test_dir
-
 num_workers = 0
-
-
 image_datasets = {x: datasets.ImageFolder( os.path.join(data_dir,x) ,data_transforms) for x in ['gallery_satellite', 'query_drone']}
 dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=opt.batchsize,
                                             shuffle=False, num_workers=num_workers,pin_memory=True) for x in ['gallery_satellite', 'query_drone']}
 use_gpu = torch.cuda.is_available()
-
 
 def which_view(name):
     view_mapping = {'satellite': 1, 'street': 2, 'drone': 3}
@@ -105,8 +89,6 @@ def which_view(name):
             return value
     print('unknown view')
     return -1
-
-
 
 
 def extract_feature(model, dataloaders, view_index):
@@ -146,7 +128,6 @@ def extract_feature(model, dataloaders, view_index):
             features.append(ff.cpu())  
 
     return torch.cat(features, dim=0)
-
 
 def get_id(img_path):
     camera_id = []
@@ -212,8 +193,6 @@ if __name__ == "__main__":
         if correct_match is None:
             print(f"Wrong Match: Label {gallery_label[wrong_match]}")
     
-        
-
     ###########################################################################
 
     time_elapsed = time.time() - since
