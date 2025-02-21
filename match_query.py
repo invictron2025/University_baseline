@@ -54,13 +54,8 @@ def extract_feature(model, dataloaders, view_index):
 
             with torch.autocast("cuda"):  # Just use this, no arguments needed
 
-                if view_index == 1:
-                    outputs, _, _ = model(img_stack, None, None)
-                elif view_index == 3:
-                    _, _, outputs = model(None, None, img_stack)
-                else:
-                    raise ValueError(f"Invalid view_index: {view_index}")  # Avoid silent failures
-
+                _, _, outputs = model(None, None, img_stack)
+         
             # Sum flipped and original features in-place (reducing memory overhead)
             ff.copy_(outputs[:n] + outputs[n:])  
 
